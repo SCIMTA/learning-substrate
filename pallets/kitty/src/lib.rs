@@ -111,7 +111,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::weight(46_000_000)]
+		#[pallet::weight(46_228_000)]
 		pub fn mint(origin: OriginFor<T>, price: u32) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let start = T::TimeProvider::now();
