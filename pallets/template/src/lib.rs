@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use frame_support::dispatch::DispatchResultWithPostInfo;
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// <https://docs.substrate.io/v3/runtime/frame>
@@ -14,10 +15,13 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+use frame_support::pallet_prelude::*;
+use frame_system::pallet_prelude::*;
+
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+
+	pub use super::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -33,14 +37,10 @@ pub mod pallet {
 	// The pallet's runtime storage items.
 	// https://docs.substrate.io/v3/runtime/storage
 	#[pallet::storage]
-	#[pallet::getter(fn balance)]
+	#[pallet::getter(fn something)]
 	// Learn more about declaring storage items:
 	// https://docs.substrate.io/v3/runtime/storage#declaring-storage-items
-	pub type Balance<T: Config> = StorageMap<_, Blake2_128, T::AccountId, u32, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn total_amount)]
-	pub type TotalAmount<T> = StorageValue<_, u32>;
+	pub type Something<T> = StorageValue<_, u32>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
@@ -49,9 +49,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
-		Mint(T::AccountId, u32),
-		Burn(T::AccountId, u32),
-		Transfer(T::AccountId, T::AccountId, u32),
+		SomethingStored(u32, T::AccountId),
 	}
 
 	// Errors inform users that something went wrong.
@@ -63,6 +61,28 @@ pub mod pallet {
 		StorageOverflow,
 	}
 
+	
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub genesis_value: u32,
+	}
+
+	#[cfg(feature= "std")]
+	impl Default for GenesisConfig {
+		fn default() -> GenesisConfig {
+			GenesisConfig {
+				genesis_value: 0u32,
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T:Config> GenesisBuild<T> for GenesisConfig {
+		fn build (&self) {
+			Something::<T>::put(self.genesis_value)
+		}
+	}
+
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
 	// These functions materialize as "extrinsics", which are often compared to transactions.
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
@@ -71,61 +91,54 @@ pub mod pallet {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn mint(origin: OriginFor<T>, amount: u32) -> DispatchResult {
+		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
 			// Check that the extrinsic was signed and get the signer.
 			// This function will return an error if the extrinsic is not signed.
 			// https://docs.substrate.io/v3/runtime/origins
 			let who = ensure_signed(origin)?;
 
 			// Update storage.
-			<Balance<T>>::insert(&who, amount);
-
-			let _current_total_amount = <TotalAmount<T>>::get();
-			<TotalAmount<T>>::put(_current_total_amount.unwrap() + amount);
+			<Something<T>>::put(something);
 
 			// Emit an event.
-			Self::deposit_event(Event::Mint(who, amount));
+			Self::deposit_event(Event::SomethingStored(something, who));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
 
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn transfer(origin: OriginFor<T>, amount: u32, to: T::AccountId) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/v3/runtime/origins
-			let who = ensure_signed(origin)?;
+		/// An example dispatchable that may throw a custom error.
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
+		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
+			let _who = ensure_signed(origin)?;
 
-			// Update storage.
-			let from_balance = <Balance<T>>::get(&who);
-			let to_balance = <Balance<T>>::get(&to);
-			<Balance<T>>::insert(&who, from_balance - amount);
-			<Balance<T>>::insert(&to, to_balance + amount);
-
-			// Emit an event.
-			Self::deposit_event(Event::Transfer(who, to, amount));
-			// Return a successful DispatchResultWithPostInfo
-			Ok(())
+			// Read a value from storage.
+			match <Something<T>>::get() {
+				// Return an error if the value has not been set.
+				None => return Err(Error::<T>::NoneValue.into()),
+				Some(old) => {
+					// Increment the value read from storage; will error in the event of overflow.
+					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
+					// Update the value in storage with the incremented result.
+					<Something<T>>::put(new);
+					Ok(())
+				},
+			}
 		}
+	}
+}
 
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn burn(origin: OriginFor<T>, amount: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/v3/runtime/origins
-			let who = ensure_signed(origin)?;
+impl<T: Config> Pallet<T> {
+	pub fn update_storage(value: u32) -> DispatchResult {
+		Something::<T>::put(value);
+		Ok(())
+	}
+}
+pub trait DoSome {
+	fn increase_value(value: u32) -> u32;
+}
 
-			// Update storage.
-			let from_balance = <Balance<T>>::get(&who);
-			<Balance<T>>::insert(&who, from_balance - amount);
-
-			let _current_total_amount = <TotalAmount<T>>::get();
-			<TotalAmount<T>>::put(_current_total_amount.unwrap() - amount);
-
-			// Emit an event.
-			Self::deposit_event(Event::Burn(who, amount));
-			// Return a successful DispatchResultWithPostInfo
-			Ok(())
-		}
+impl<T: Config> DoSome for Pallet<T> {
+	fn increase_value(value: u32) -> u32 {
+		value + 5
 	}
 }

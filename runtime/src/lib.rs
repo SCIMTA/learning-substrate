@@ -9,6 +9,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
+use pallet_utility::weights;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
@@ -44,8 +45,19 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 /// Import the template pallet.
-pub use pallet_erc20;
-pub use pallet_kitty;
+pub use pallet_template;
+
+/// Import the demo pallet.
+pub use pallet_demo;
+
+/// Import the kitties pallet.
+pub use pallet_kitties;
+
+/// Import the tightly-coupling pallet.
+pub use pallet_tightly_coupling;
+
+/// Import the loosely-coupling pallet.
+pub use pallet_loosely_coupling;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -201,29 +213,6 @@ impl frame_system::Config for Runtime {
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
 
-impl pallet_nicks::Config for Runtime {
-	type Currency = Balances;
-
-	// Set ReservationFee to a value.
-	type ReservationFee = ConstU128<100>;
-
-	// No action is taken when deposits are forfeited.
-	type Slashed = ();
-
-	// Configure the FRAME System Root origin as the Nick pallet admin.
-	// https://paritytech.github.io/substrate/master/frame_system/enum.RawOrigin.html#variant.Root
-	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-
-	// Set MinLength of nick name to a desired value.
-	type MinLength = ConstU32<8>;
-
-	// Set MaxLength of nick name to a desired value.
-	type MaxLength = ConstU32<32>;
-
-	// The ubiquitous event type.
-	type Event = Event;
-}
-
 impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
@@ -286,13 +275,39 @@ impl pallet_sudo::Config for Runtime {
 }
 
 /// Configure the pallet-template in pallets/template.
-impl pallet_erc20::Config for Runtime {
+impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
-impl pallet_kitty::Config for Runtime {
+
+/// Configure the pallet-demo in pallets/demo.
+impl pallet_demo::Config for Runtime {
 	type Event = Event;
-	type TimeProvider = Timestamp;
-	type Rand = RandomnessCollectiveFlip;
+}
+
+/// Configure the pallet-kitties in pallets/kitties.
+impl pallet_kitties::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type Time = pallet_timestamp::Pallet<Runtime>;
+	type Randomness = RandomnessCollectiveFlip;
+}
+
+/// Configure the pallet-kitties in pallets/kitties.
+impl pallet_tightly_coupling::Config for Runtime {
+	type Event = Event;
+}
+
+/// Configure the pallet-kitties in pallets/kitties.
+impl pallet_loosely_coupling::Config for Runtime {
+	type Event = Event;
+	type Increase = TemplateModule;
+}
+
+impl pallet_utility::Config for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -304,16 +319,19 @@ construct_runtime!(
 	{
 		System: frame_system,
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
-		Nicks: pallet_nicks,
 		Timestamp: pallet_timestamp,
 		Aura: pallet_aura,
 		Grandpa: pallet_grandpa,
 		Balances: pallet_balances,
+		Utility: pallet_utility,
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
-		ERC20: pallet_erc20,
-		Kitty: pallet_kitty,
+		TemplateModule: pallet_template,
+		Demo: pallet_demo,
+		Kitties: pallet_kitties,
+		Tightly: pallet_tightly_coupling,
+		Loosely: pallet_loosely_coupling,
 	}
 );
 
@@ -358,8 +376,7 @@ mod benches {
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
-		[pallet_erc20, ERC20]
-		[pallet_kitty, Kitty]
+		[pallet_template, TemplateModule]
 	);
 }
 

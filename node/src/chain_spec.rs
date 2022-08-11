@@ -1,12 +1,13 @@
 use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
-	SystemConfig, WASM_BINARY,
+	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, KittiesConfig, Signature,
+	SudoConfig, SystemConfig, TemplateModuleConfig, WASM_BINARY,
 };
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -106,6 +107,8 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
 					get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
 					get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
+					get_account_id_from_seed::<sr25519::Public>("DinhCao"),
+					get_account_id_from_seed::<sr25519::Public>("DinhCao//stash"),
 				],
 				true,
 			)
@@ -152,5 +155,12 @@ fn testnet_genesis(
 			key: Some(root_key),
 		},
 		transaction_payment: Default::default(),
+		template_module: TemplateModuleConfig { genesis_value: 10u32 },
+		kitties: KittiesConfig {
+			// genesis_kitties
+			genesis_kitties: vec![b"catpussy".as_slice().to_vec()],
+			owner: Some(get_account_id_from_seed::<sr25519::Public>("Alice")),
+			current_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
+		},
 	}
 }

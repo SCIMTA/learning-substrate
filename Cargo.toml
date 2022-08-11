@@ -1,8 +1,7 @@
 [workspace]
 members = [
     "node",
-    "pallets/erc20",
-    "pallets/kitty",
+    "pallets/template",
     "runtime",
 ]
 [profile.release]
