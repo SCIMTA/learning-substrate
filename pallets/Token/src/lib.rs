@@ -190,7 +190,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let sender_allowed_balance =
-				<allowed<T>>::get(&sender, from.clone()).unwrap_or_default();
+				<allowed<T>>::get(&from.clone(), sender.clone()).unwrap_or_default();
 			let new_allowed_balance =
 				sender_allowed_balance.checked_sub(amount).ok_or(Error::<T>::StorageOverflow)?;
 			let from_balance = <balances<T>>::get(&from).unwrap_or_default();
@@ -199,7 +199,7 @@ pub mod pallet {
 			let receiver_balance = <balances<T>>::get(&to).unwrap_or_default();
 			let new_receiver_balance =
 				receiver_balance.checked_add(amount).ok_or(Error::<T>::StorageOverflow)?;
-			<allowed<T>>::insert(&sender, from.clone(), new_allowed_balance);
+			<allowed<T>>::insert(&from.clone(), sender.clone(), new_allowed_balance);
 			<balances<T>>::insert(&from, new_from_balance);
 			<balances<T>>::insert(&to, new_receiver_balance);
 
