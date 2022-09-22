@@ -5,19 +5,40 @@
 /// <https://docs.substrate.io/reference/frame-pallets/>
 pub use pallet::*;
 
-#[cfg(test)]
-mod mock;
+// #[cfg(test)]
+// mod mock;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+// #[cfg(feature = "runtime-benchmarks")]
+// mod benchmarking;
+
+use frame_support::{inherent::BlockT, pallet_prelude::*};
+use frame_system::pallet_prelude::*;
+use pallet_token::TokenInterface;
+
+// Time config
+pub type BlockNumber = u32;
+pub const MILLISECS_PER_BLOCK: u64 = 6000;
+// NOTE: Currently it is not possible to change the slot duration after the chain has started.
+//       Attempting to do so will brick block production.
+pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
+// Time is measured by number of blocks.
+pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
+pub const HOURS: BlockNumber = MINUTES * 60;
+pub const DAYS: BlockNumber = HOURS * 24;
+pub const WEEKS: BlockNumber = DAYS * 7;
+
+pub const minProposalDebatePeriod: BlockNumber = 2 * WEEKS;
+pub const quorumHalvingPeriod: BlockNumber = 25 * WEEKS;
+pub const executeProposalPeriod: BlockNumber = 10 * DAYS;
+pub const preSupportTime: BlockNumber = 2 * DAYS;
+pub const maxDepositDivisor: u128 = 100;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -28,9 +49,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		#[pallet::constant]
-		type minProposalDebatePeriod = 2;
+		type TokenInterface: TokenInterface<who = Self::AccountId>;
 	}
 
 	// The pallet's runtime storage items.
@@ -49,6 +68,7 @@ pub mod pallet {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
 		SomethingStored(u32, T::AccountId),
+		CallBalances(u128, T::AccountId),
 	}
 
 	// Errors inform users that something went wrong.
@@ -80,6 +100,14 @@ pub mod pallet {
 			// Emit an event.
 			Self::deposit_event(Event::SomethingStored(something, who));
 			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+
+		#[pallet::weight(10_000 + T::DbWeight::get().reads(1))]
+		pub fn call_balances(origin: OriginFor<T>, _who: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let balance = T::TokenInterface::_balanceOf(_who.clone());
+			Self::deposit_event(Event::CallBalances(balance, _who));
 			Ok(())
 		}
 

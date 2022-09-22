@@ -137,6 +137,8 @@ pub mod pallet {
 		Transfered(T::AccountId, T::AccountId, u128),
 		TransferedFrom(T::AccountId, T::AccountId, T::AccountId, u128),
 		Approval(T::AccountId, T::AccountId, u128),
+		Mint(T::AccountId, u128),
+		Burn(T::AccountId, u128),
 	}
 
 	// Errors inform users that something went wrong.
@@ -147,6 +149,7 @@ pub mod pallet {
 		/// Errors should have helpful documentation associated with them.
 		StorageOverflow,
 		InsufficientFunds,
+		NotOwner,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -207,5 +210,52 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1, 1))]
+		pub fn mint(origin: OriginFor<T>, to: T::AccountId, amount: u128) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::owner().unwrap(), Error::<T>::NotOwner);
+			let total_supply = Self::totalSupply();
+			let new_total_supply =
+				total_supply.checked_add(amount).ok_or(Error::<T>::StorageOverflow)?;
+			let receiver_balance = <balances<T>>::get(&to).unwrap_or_default();
+			let new_receiver_balance =
+				receiver_balance.checked_add(amount).ok_or(Error::<T>::StorageOverflow)?;
+			<balances<T>>::insert(&to, new_receiver_balance);
+			<totalSupply<T>>::put(new_total_supply);
+
+			Self::deposit_event(Event::Mint(to, amount));
+
+			Ok(())
+		}
+
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1, 1))]
+		pub fn burn(origin: OriginFor<T>, amount: u128) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let sender_balance = <balances<T>>::get(&sender).unwrap_or_default();
+			let new_balance =
+				sender_balance.checked_sub(amount).ok_or(Error::<T>::StorageOverflow)?;
+			let total_supply = Self::totalSupply();
+			let new_total_supply =
+				total_supply.checked_sub(amount).ok_or(Error::<T>::StorageOverflow)?;
+			<balances<T>>::insert(&sender, new_balance);
+			<totalSupply<T>>::put(new_total_supply);
+
+			Self::deposit_event(Event::Burn(sender, amount));
+
+			Ok(())
+		}
+	}
+}
+
+pub trait TokenInterface {
+	type who;
+	fn _balanceOf(account: Self::who) -> u128;
+}
+
+impl<T: Config> TokenInterface for Pallet<T> {
+	type who = T::AccountId;
+	fn _balanceOf(account: Self::who) -> u128 {
+		<balances<T>>::get(account).unwrap_or_default()
 	}
 }

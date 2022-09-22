@@ -52,6 +52,9 @@ pub use pallet_token;
 /// Import the plutocracy pallet.
 pub use pallet_plutocracy;
 
+/// Import the dao pallet.
+pub use pallet_dao;
+
 /// An index to a block.
 pub type BlockNumber = u32;
 
@@ -287,6 +290,12 @@ impl pallet_plutocracy::Config for Runtime {
 	type Event = Event;
 }
 
+// Configure the pallet-dao
+impl pallet_dao::Config for Runtime {
+	type Event = Event;
+	type TokenInterface = Token;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime
@@ -307,6 +316,7 @@ construct_runtime!(
 		TemplateModule: pallet_template,
 		Token: pallet_token,
 		Plutocracy: pallet_plutocracy,
+		Dao: pallet_dao,
 	}
 );
 

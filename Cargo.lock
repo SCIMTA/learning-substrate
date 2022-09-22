@@ -3790,6 +3790,7 @@ dependencies = [
  "hex-literal",
  "pallet-aura",
  "pallet-balances",
+ "pallet-dao",
  "pallet-grandpa",
  "pallet-plutocracy",
  "pallet-randomness-collective-flip",
@@ -4024,6 +4025,21 @@ dependencies = [
  "scale-info",
  "sp-runtime",
  "sp-std 4.0.0 (git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.28)",
+]
+
+[[package]]
+name = "pallet-dao"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-token",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
 ]
 
 [[package]]
