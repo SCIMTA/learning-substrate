@@ -14,9 +14,11 @@ pub use pallet::*;
 // #[cfg(feature = "runtime-benchmarks")]
 // mod benchmarking;
 
-use frame_support::{inherent::BlockT, pallet_prelude::*};
+use frame_support::inherent::Vec;
+use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use pallet_token::TokenInterface;
+use sp_core::Bytes;
 
 // Time config
 pub type BlockNumber = u32;
@@ -36,11 +38,69 @@ pub const executeProposalPeriod: BlockNumber = 10 * DAYS;
 pub const preSupportTime: BlockNumber = 2 * DAYS;
 pub const maxDepositDivisor: u128 = 100;
 
+//impl clone for storagemap
+// use frame_support::storage::Key;
+use codec::FullCodec;
+use frame_support::traits::StorageInstance;
+use frame_support::StorageHasher;
+
+// impl Clone for StorageMap<Prefix, Hasher, Key, Value> {
+// 	fn clone(&self) -> Self {
+// 		let mut new_map = Self::new();
+// 		for (k, v) in self.iter() {
+// 			new_map.insert(k, v);
+// 		}
+// 		new_map
+// }
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
+	// A proposal with `newCurator == false` represents a transaction
+	// to be issued by this DAO
+	// A proposal with `newCurator == true` represents a DAO split
+
+	#[derive(Encode, Decode)]
+	struct Proposal<T: Config, U> {
+		// The address where the `amount` will go to if the proposal is accepted
+		recipient: T::AccountId,
+		// The amount to transfer to `recipient` if the proposal is accepted.
+		amount: u128,
+		// A plain text description of the proposal
+		description: Vec<u8>,
+		// A unix timestamp, denoting the end of the voting period
+		votingDeadline: T::BlockNumber,
+		// True if the proposal's votes have yet to be counted, otherwise False
+		open: bool,
+		// True if quorum has been reached, the votes have been counted, and
+		// the majority said yes
+		proposalPassed: bool,
+		// A hash to check validity of a proposal
+		//TODO: change to hash
+		proposalHash: Bytes,
+		// Deposit in wei the creator added when submitting their proposal. It
+		// is taken from the msg.value of a newProposal call.
+		proposalDeposit: u128,
+		// True if this proposal is to assign a new Curator
+		newCurator: bool,
+		// true if more tokens are in favour of the proposal than opposed to it at
+		// least `preSupportTime` before the voting deadline
+		preSupport: bool,
+		// Number of Tokens in favor of the proposal
+		yea: u128,
+		// Number of Tokens opposed to the proposal
+		nay: u128,
+		// Simple mapping to check if a shareholder has voted for it
+		votedYes: StorageMap<U, Blake2_128Concat, T::AccountId, bool, OptionQuery>,
+		// // Simple mapping to check if a shareholder has voted against it
+		votedNo: StorageMap<U, Blake2_128Concat, T::AccountId, bool, OptionQuery>,
+		// Address of the shareholder who created the proposal
+		creator: T::AccountId,
+	}
+
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
@@ -52,23 +112,66 @@ pub mod pallet {
 		type TokenInterface: TokenInterface<who = Self::AccountId>;
 	}
 
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/main-docs/build/runtime-storage/
+	// #[pallet::storage]
+	// #[pallet::getter(fn proposals)]
+	// pub type Proposals<T:Config> = StorageValue<_, Vec<Proposal<T, T>>>;
+
+	// The quorum needed for each proposal is partially calculated by
+	// totalSupply / minQuorumDivisor
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+	#[pallet::getter(fn minQuorumDivisor)]
+	pub(super) type minQuorumDivisor<T> = StorageValue<_, u128, ValueQuery>;
+
+	// The unix time of the last time quorum was reached on a proposal
+	#[pallet::storage]
+	#[pallet::getter(fn lastTimeMinQuorumMet)]
+	pub(super) type lastTimeMinQuorumMet<T> = StorageValue<_, BlockNumber, ValueQuery>;
+
+	// Address of the curator of this DAO
+	#[pallet::storage]
+	#[pallet::getter(fn curator)]
+	pub(super) type curator<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
+
+	// The whitelist: List of addresses the DAO is allowed to send ether to
+	#[pallet::storage]
+	#[pallet::getter(fn allowedRecipients)]
+	pub(super) type allowedRecipients<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, bool, OptionQuery>;
+
+	// Map of addresses blocked during a vote (not allowed to transfer DAO
+	// tokens). The address points to the proposal ID.
+	#[pallet::storage]
+	#[pallet::getter(fn _blocked)]
+	pub(super) type _blocked<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, u128, OptionQuery>;
+
+	// Map of addresses and proposal voted on by this address
+	#[pallet::storage]
+	#[pallet::getter(fn votingRegister)]
+	pub(super) type votingRegister<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, Vec<u128>, OptionQuery>;
+
+	// The minimum deposit (in wei) required to submit any proposal that is not
+	// requesting a new Curator (no deposit is required for splits)
+	#[pallet::storage]
+	#[pallet::getter(fn proposalDeposit)]
+	pub(super) type proposalDeposit<T> = StorageValue<_, u128, ValueQuery>;
+
+	// the accumulated sum of all current proposal deposits
+	#[pallet::storage]
+	#[pallet::getter(fn sumOfProposalDeposits)]
+	pub(super) type sumOfProposalDeposits<T> = StorageValue<_, u128, ValueQuery>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/main-docs/build/events-errors/
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored(u32, T::AccountId),
 		CallBalances(u128, T::AccountId),
+		ProposalAdded(u128, T::AccountId, u128, Vec<u8>),
+		Voted(u128, bool, T::AccountId),
+		ProposalTallied(u128, bool, u128, u128),
+		AllowedRecipientChanged(T::AccountId, bool),
 	}
 
 	// Errors inform users that something went wrong.
@@ -85,49 +188,12 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/main-docs/build/origins/
-			let who = ensure_signed(origin)?;
-
-			// Update storage.
-			<Something<T>>::put(something);
-
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something, who));
-			// Return a successful DispatchResultWithPostInfo
-			Ok(())
-		}
-
 		#[pallet::weight(10_000 + T::DbWeight::get().reads(1))]
 		pub fn call_balances(origin: OriginFor<T>, _who: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let balance = T::TokenInterface::_balanceOf(_who.clone());
 			Self::deposit_event(Event::CallBalances(balance, _who));
 			Ok(())
-		}
-
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
-
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => return Err(Error::<T>::NoneValue.into()),
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				},
-			}
 		}
 	}
 }
