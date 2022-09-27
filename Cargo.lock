@@ -4034,6 +4034,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-timestamp",
  "pallet-token",
  "parity-scale-codec",
  "scale-info",

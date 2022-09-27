@@ -294,6 +294,7 @@ impl pallet_plutocracy::Config for Runtime {
 impl pallet_dao::Config for Runtime {
 	type Event = Event;
 	type TokenInterface = Token;
+	type Time = Timestamp;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

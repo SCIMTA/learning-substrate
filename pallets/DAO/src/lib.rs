@@ -16,6 +16,8 @@ pub use pallet::*;
 
 use frame_support::inherent::Vec;
 use frame_support::pallet_prelude::*;
+use frame_support::sp_runtime::SaturatedConversion;
+use frame_support::traits::Time;
 use frame_system::pallet_prelude::*;
 use pallet_token::TokenInterface;
 use sp_core::Bytes;
@@ -55,6 +57,7 @@ use frame_support::StorageHasher;
 
 #[frame_support::pallet]
 pub mod pallet {
+
 	use super::*;
 
 	// A proposal with `newCurator == false` represents a transaction
@@ -109,12 +112,18 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Time: Time;
 		type TokenInterface: TokenInterface<who = Self::AccountId>;
 	}
 
+	#[pallet::storage]
+	#[pallet::getter(fn proposalsId)]
+	pub type proposalsId<T> = StorageValue<_, u128, ValueQuery>;
+
 	// #[pallet::storage]
 	// #[pallet::getter(fn proposals)]
-	// pub type Proposals<T:Config> = StorageValue<_, Vec<Proposal<T, T>>>;
+	// pub type proposals<T: Config> =
+	// 	StorageMap<_, Blake2_128Concat, u128, Proposal<T, U>, OptionQuery>;
 
 	// The quorum needed for each proposal is partially calculated by
 	// totalSupply / minQuorumDivisor
@@ -137,6 +146,11 @@ pub mod pallet {
 	#[pallet::getter(fn allowedRecipients)]
 	pub(super) type allowedRecipients<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, bool, OptionQuery>;
+
+	// #[pallet::storage]
+	// #[pallet::getter(fn proposals)]
+	// pub(super) type proposals<T: Config> =
+	// 	StorageMap<_, Blake2_128Concat, u8, Vec<Proposal>, OptionQuery>;
 
 	// Map of addresses blocked during a vote (not allowed to transfer DAO
 	// tokens). The address points to the proposal ID.
@@ -167,7 +181,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		// Util events
 		CallBalances(u128, T::AccountId),
+		CallCurrentTime(u128),
+
+		// Proposal
 		ProposalAdded(u128, T::AccountId, u128, Vec<u8>),
 		Voted(u128, bool, T::AccountId),
 		ProposalTallied(u128, bool, u128, u128),
@@ -193,6 +211,42 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let balance = T::TokenInterface::_balanceOf(_who.clone());
 			Self::deposit_event(Event::CallBalances(balance, _who));
+			Ok(())
+		}
+
+		#[pallet::weight(10_000 + T::DbWeight::get().reads(1))]
+		pub fn get_current_time(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let time = T::Time::now();
+			Self::deposit_event(Event::CallCurrentTime(time.saturated_into::<u64>().into()));
+			Ok(())
+		}
+
+		// #[pallet::weight(10_000 + 500_000_000)]
+		// pub fn expensive_or_cheap(origin: OriginFor<T>, input: u64) -> DispatchResultWithPostInfo {
+		// 	Ok(Some(10_000).into())
+		// }
+
+		#[pallet::weight(10_000 + T::DbWeight::get().reads(1))]
+		pub fn DAO(
+			origin: OriginFor<T>,
+			_currator: T::AccountId,
+			_proposalDeposit: u128,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let time = T::Time::now();
+			let _timeCurrent: u32 = time.saturated_into::<u32>();
+
+			<curator<T>>::put(_currator);
+			<proposalDeposit<T>>::put(_proposalDeposit);
+			<lastTimeMinQuorumMet<T>>::put(_timeCurrent);
+			<minQuorumDivisor<T>>::put(7);
+
+			// Add empty proposal to ignore 0
+			// <proposals<T>>::put(Vec::new());
+
+			// let balance = T::TokenInterface::_balanceOf(_who.clone());
+			// Self::deposit_event(Event::CallBalances(balance, _who));
 			Ok(())
 		}
 	}
