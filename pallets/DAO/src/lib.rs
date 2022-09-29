@@ -120,10 +120,10 @@ pub mod pallet {
 	#[pallet::getter(fn proposalsId)]
 	pub type proposalsId<T> = StorageValue<_, u128, ValueQuery>;
 
-	// #[pallet::storage]
-	// #[pallet::getter(fn proposals)]
-	// pub type proposals<T: Config> =
-	// 	StorageMap<_, Blake2_128Concat, u128, Proposal<T, U>, OptionQuery>;
+	#[pallet::storage]
+	#[pallet::getter(fn proposals)]
+	pub type proposals<T: Config> =
+		StorageMap<_, Blake2_128Concat, u128, Proposal<T, U>, OptionQuery>;
 
 	// The quorum needed for each proposal is partially calculated by
 	// totalSupply / minQuorumDivisor
@@ -146,11 +146,6 @@ pub mod pallet {
 	#[pallet::getter(fn allowedRecipients)]
 	pub(super) type allowedRecipients<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, bool, OptionQuery>;
-
-	// #[pallet::storage]
-	// #[pallet::getter(fn proposals)]
-	// pub(super) type proposals<T: Config> =
-	// 	StorageMap<_, Blake2_128Concat, u8, Vec<Proposal>, OptionQuery>;
 
 	// Map of addresses blocked during a vote (not allowed to transfer DAO
 	// tokens). The address points to the proposal ID.
@@ -222,10 +217,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(10_000 + 500_000_000)]
-		// pub fn expensive_or_cheap(origin: OriginFor<T>, input: u64) -> DispatchResultWithPostInfo {
-		// 	Ok(Some(10_000).into())
-		// }
+		#[pallet::weight(10_000 + 500_000_000)]
+		pub fn expensive_or_cheap(origin: OriginFor<T>, input: u64) -> DispatchResultWithPostInfo {
+			Ok(Some(10_000).into())
+		}
 
 		#[pallet::weight(10_000 + T::DbWeight::get().reads(1))]
 		pub fn DAO(
